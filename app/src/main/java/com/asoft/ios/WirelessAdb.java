@@ -19,11 +19,21 @@ import java.security.GeneralSecurityException;
  * (AdbMdns): the last port is tried first, then the announcement. After a restart of the phone Wireless
  * debugging is off until the user turns it on again; the pairing itself stays (Settings lists the key under
  * "Paired devices" until it is removed there).
+ *
+ * PATCH NOTE (S22 Ultra ANR): connected() is called from the UI thread (MainActivity.showSettings). It used to
+ * take LOCK, which shell() holds for the whole connect attempt, including AdbMdns.find (up to 6 s, twice, plus
+ * 3 s for the last port). With Wireless debugging off the UI thread then waited well past Android's 10 s input
+ * timeout: "Input dispatching timed out ... WirelessAdb.connected ... held by thread free-memory". connected()
+ * now reads the volatile conn without LOCK, and connection() does not search mDNS when Wireless debugging is
+ * known to be off.
  */
 final class WirelessAdb {
     private static final String PREFS = "asoft", PAIRED = "wadb-paired", PORT = "wadb-port", REFUSED = "wadb-refused";
+
     private static final Object LOCK = new Object();
-    private static AdbConnection conn;
+    // volatile: connected() reads it from the UI thread without LOCK
+    private static volatile AdbConnection conn;
+
     /** Why the last try to connect failed, in the screen's words; null after one that worked. */
     static volatile String lastError;
 
@@ -99,22 +109,27 @@ final class WirelessAdb {
     }
 
     private static void close() {
-        if (conn != null) {
-            conn.close();
+        AdbConnection old = conn;
+        if (old != null) {
+            old.close();
             conn = null;
         }
     }
 
+    /**
+     * Lock-free on purpose: the UI thread calls this (Settings screen), and LOCK can be held for many seconds by
+     * shell() while it looks for adbd's port.
+     */
     static boolean connected() {
-        synchronized (LOCK) {
-            return conn != null && !conn.closed();
-        }
+        AdbConnection c = conn;
+        return c != null && !c.closed();
     }
 
-    /** The open connection, or a new one: the last port first, then the one adbd announces now. */
+    /** The open connection, or a new one: the last port first, then the one adbd announces now. Needs LOCK. */
     private static AdbConnection connection(Context c) throws IOException {
-        if (conn != null && !conn.closed()) {
-            return conn;
+        AdbConnection existing = conn;
+        if (existing != null && !existing.closed()) {
+            return existing;
         }
         conn = null;
         AdbKey key;
@@ -133,6 +148,10 @@ final class WirelessAdb {
             } catch (IOException e) {
                 // Wireless debugging was switched off and on since: another port now
             }
+        }
+        // Known to be off: there is no announcement to wait for, so do not spend 6 s on mDNS.
+        if (switchedOn(c) == 0) {
+            throw new IOException("Wireless debugging is off (Settings > Developer options)");
         }
         int port = AdbMdns.find(c, AdbMdns.CONNECT, 6_000);
         if (port <= 0) {
