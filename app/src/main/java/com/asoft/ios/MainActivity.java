@@ -1477,7 +1477,12 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Copy", (d, w) -> new Thread(() -> {
                     String script;
                     try (java.io.InputStream in = getAssets().open("copy-ios-to-dev.sh")) {
-                        script = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                        byte[] buf = new byte[4096];
+                        for (int n; (n = in.read(buf)) > 0; ) {      // not readAllBytes: API 33, minSdk is 29
+                            bo.write(buf, 0, n);
+                        }
+                        script = bo.toString("UTF-8");
                     } catch (java.io.IOException e) {
                         runOnUiThread(() -> new AlertDialog.Builder(this).setTitle("Copy failed")
                                 .setMessage("The script is missing from this build: " + e.getMessage()).setPositiveButton("OK", null).show());
