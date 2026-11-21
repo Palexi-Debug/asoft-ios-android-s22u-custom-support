@@ -509,6 +509,7 @@ final class Helper {
             w.println(pid);
         }
         AppLog.note(c, "helper " + job + ": QEMU pid " + pid + ", " + cpus + " vCPUs, " + (nat ? "native EL0" : "TCG") + ", " + ramMiB + " MiB");
+        RootBoost.async(c, pid, "helper " + job + " start");       // rooted phones only: fast cores, memory-killer protection
         // a death of the app's process while this runs: its record reads this folder's logs (AppExit)
         AppExit.helper(c, dir);
         Result r = new Result();
@@ -587,6 +588,9 @@ final class Helper {
                             CrashReport.thermal(c), RunStats.cpus(pid), pressure()));
                     probeAt = now;
                     probeCpu = cpu;
+                    // Android may move the app's processes between its cpusets while a job runs (screen off, app in
+                    // the background): put QEMU's threads back, and its new stubs with them
+                    RootBoost.async(c, pid, "helper " + job + " " + (now - t0mono) / 60_000 + " min");
                 }
                 if (cancelled.getAsBoolean()) {
                     if (held) {

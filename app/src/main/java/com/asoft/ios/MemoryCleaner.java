@@ -165,6 +165,12 @@ final class MemoryCleaner {
     private static void round(Context c, String what, int adbTimeoutMs) {
         ActivityManager am = c.getSystemService(ActivityManager.class);
         long before = availableMb(am);
+        // a rooted phone needs no wireless-debugging pairing for this (round() runs on the cleaner's own thread)
+        if (RootBoost.killAll(c, adbTimeoutMs)) {
+            sleep(1500);
+            AppLog.note(c, what + ": am kill-all as root, available " + before + " -> " + availableMb(am) + " MB");
+            return;
+        }
         if (WirelessAdb.paired(c)) {
             try {
                 WirelessAdb.shell(c, "am kill-all", adbTimeoutMs);
