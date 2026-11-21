@@ -2032,6 +2032,7 @@ final class Guest {
         if (pid < 0) {
             throw new IOException("cannot start QEMU");
         }
+        RootBoost.async(c, pid, "iOS 16 start");               // rooted phones only
         state = resumed ? "resuming" : "booting";
         track(IOS16, false, resumed ? "the save " + loadTag : "a boot", logAt, smp, ram, "", Emu.qemuPath(c));
         connectQmp(c, pid);
@@ -2456,6 +2457,7 @@ final class Guest {
             throw new IOException("cannot start QEMU");
         }
         AppLog.note(c, osName(os) + " QEMU pid " + pid);
+        RootBoost.async(c, pid, osName(os) + " start");        // rooted phones only
         state = resumed ? "resuming" : "booting";
         track(os, sb != null, resumed ? "the save " + loadTag : "a boot", logAt, smp, bootRamMiB, fb26W + "x" + fb26H,
                 Emu.qemu26Path(c));
