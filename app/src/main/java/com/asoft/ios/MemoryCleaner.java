@@ -34,7 +34,7 @@ final class MemoryCleaner {
 
     /** Without a pairing (WirelessAdb) only up to Android 13. */
     static boolean supported(Context c) {
-        return Build.VERSION.SDK_INT < 34 || WirelessAdb.paired(c);
+        return Build.VERSION.SDK_INT < 34 || WirelessAdb.paired(c) || RootBoost.works();
     }
 
     static boolean enabled(Context c) {

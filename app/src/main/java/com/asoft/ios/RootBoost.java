@@ -35,6 +35,42 @@ final class RootBoost {
     private static final long RETRY_MS = 10 * 60_000L;
     private static final int OOM_APP = -500, OOM_QEMU = -500;
 
+    /** The cached answer without asking "su": 1 root works, -1 no root, 0 not checked yet. Safe on the UI thread. */
+    static int state() {
+        synchronized (LOCK) {
+            return state;
+        }
+    }
+
+    private static boolean probed;
+
+    /** Once per process, on a thread of its own: asks "su" so that state() is known (a rooted phone shows its grant dialog now). */
+    static void probeOnce(Context c) {
+        synchronized (LOCK) {
+            if (probed) {
+                return;
+            }
+            probed = true;
+        }
+        Context app = c.getApplicationContext();
+        Thread t = new Thread(() -> available(app), "root-probe");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    static boolean works() {
+        return state() == 1;
+    }
+
+    /** Forgets a "no root" answer (the user may have granted it since), so that the next available() asks again. */
+    static void recheck() {
+        synchronized (LOCK) {
+            if (state == -1) {
+                state = 0;
+            }
+        }
+    }
+
     /** Whether "su" gives uid 0 here. Cached; may block up to ~20 s for a grant dialog. Not on the UI thread. */
     static boolean available(Context c) {
         synchronized (LOCK) {
