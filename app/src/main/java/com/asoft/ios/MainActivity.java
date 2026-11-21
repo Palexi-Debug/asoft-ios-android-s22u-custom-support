@@ -425,6 +425,9 @@ public class MainActivity extends Activity {
         wadbValue = row(settings, "Wireless debugging", v -> wirelessDebugging());
         ((View) wadbValue.getParent()).setVisibility(WirelessAdb.supported() ? View.VISIBLE : View.GONE);
         rootValue = row(settings, "Root boost", v -> rootCheck());
+        if (getPackageName().endsWith(".dev")) {
+            row(settings, "Copy iOS from the normal app (root)", v -> importFromMainApp());
+        }
         updateValue = row(settings, "Check for updates", v -> {
             UpdateCheck.setEnabled(this, !UpdateCheck.enabled(this));
             showUpdate();
@@ -1477,6 +1480,36 @@ public class MainActivity extends Activity {
                 new AlertDialog.Builder(this).setTitle("Root boost").setMessage(msg).setPositiveButton("OK", null).show();
             });
         }, "root-check").start();
+    }
+
+    /**
+     * Dev build only: copies the finished iOS 16 install of the normal app (com.asoft.ios) into this app with root
+     * (assets/copy-ios-to-dev.sh), so that this app needs no setup of its own. The same script lives in tools/.
+     */
+    private void importFromMainApp() {
+        new AlertDialog.Builder(this)
+                .setTitle("Copy iOS from the normal app?")
+                .setMessage("With root, this copies the finished iOS 16 install of the normal ASoftware app into this "
+                        + "app (a few GB, some minutes), so that this app needs no 8-hour setup. The normal app keeps "
+                        + "its own copy. Keep the screen on until it says it is done.\n\nA root grant dialog may appear first.")
+                .setPositiveButton("Copy", (d, w) -> new Thread(() -> {
+                    String script;
+                    try (java.io.InputStream in = getAssets().open("copy-ios-to-dev.sh")) {
+                        script = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    } catch (java.io.IOException e) {
+                        runOnUiThread(() -> new AlertDialog.Builder(this).setTitle("Copy failed")
+                                .setMessage("The script is missing from this build: " + e.getMessage()).setPositiveButton("OK", null).show());
+                        return;
+                    }
+                    String out = RootBoost.available(this) ? RootBoost.run("NO_STOP_DST=1\n" + script, 20 * 60_000) : null;
+                    String msg = out == null ? "No root, or it took longer than 20 minutes. Check Root boost first."
+                            : out.trim().isEmpty() ? "The script printed nothing." : out.trim();
+                    AppLog.note(this, "copy iOS from the normal app: " + msg.replace('\n', ' '));
+                    runOnUiThread(() -> new AlertDialog.Builder(this).setTitle("Copy iOS").setMessage(msg + "\n\nClose and reopen the app to see the result.")
+                            .setPositiveButton("OK", null).show());
+                }, "import-main").start())
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void toggleFreeRam() {
