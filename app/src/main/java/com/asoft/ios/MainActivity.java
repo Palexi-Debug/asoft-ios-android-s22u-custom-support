@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
 
     private LinearLayout box;
     private final Panel p26 = new Panel(Guest.IOS26), p16 = new Panel(Guest.IOS16), pWatch = new Panel(Guest.WATCH);
-    private TextView hint, powerWarn, freeRamValue, wadbValue, updateValue, logsValue, footer, engineLog;
+    private TextView hint, powerWarn, freeRamValue, wadbValue, rootValue, updateValue, logsValue, footer, engineLog;
     private LinearLayout updateBar, advanced;
     private TextView updateText, updateNote, updateGet, updateDismiss;
     /**
@@ -416,6 +416,7 @@ public class MainActivity extends Activity {
         freeRamValue = row(settings, "Free memory for iOS", v -> toggleFreeRam());
         wadbValue = row(settings, "Wireless debugging", v -> wirelessDebugging());
         ((View) wadbValue.getParent()).setVisibility(WirelessAdb.supported() ? View.VISIBLE : View.GONE);
+        rootValue = row(settings, "Root boost", v -> rootCheck());
         updateValue = row(settings, "Check for updates", v -> {
             UpdateCheck.setEnabled(this, !UpdateCheck.enabled(this));
             showUpdate();
@@ -1419,10 +1420,45 @@ public class MainActivity extends Activity {
         freeRamValue.setText(can ? MemoryCleaner.enabled(this) ? "On" : "Off" : "Pair first");
         int records = CrashReport.files(this).size();
         logsValue.setText(records == 0 ? "" : records == 1 ? "1 record" : records + " records");
+        RootBoost.probeOnce(this);
+        rootValue.setText(RootBoost.state() == 1 ? "Root OK" : RootBoost.state() < 0 ? "No root" : "Tap to check");
         String pairing = WadbPairService.state;
         wadbValue.setText(pairing != null ? "Pairing…" : !WirelessAdb.paired(this) ? "Not paired"
                 : WirelessAdb.refused(this) ? "Pair again" : WirelessAdb.connected() ? "Connected"
                 : WirelessAdb.switchedOn(this) == 0 ? "Paired, off now" : "Paired");
+    }
+
+    /**
+     * The root checker (S22 Ultra fork): asks "su" on a thread of its own (it may show the root manager's grant
+     * dialog), and when iOS or a setup VM runs, moves it to the fast cores right now and shows what the phone says.
+     */
+    private void rootCheck() {
+        rootValue.setText("Checking…");
+        new Thread(() -> {
+            RootBoost.recheck();
+            boolean ok = RootBoost.available(this);
+            StringBuilder sb = new StringBuilder();
+            if (!ok) {
+                sb.append("No root: \"su\" did not give uid 0 (no root, or the app was not granted root in your root manager).\n\n"
+                        + "The app works without it; only the speed-ups below are off.");
+            } else {
+                sb.append("Root works.\n\nWhat it does: moves iOS's QEMU (and a setup's helper VM) onto all cores, lowers "
+                        + "its chance of being ended for low memory, and frees memory without Wireless debugging.\n\n");
+                int pid = Guest.running() ? Guest.pid(this) : -1;
+                if (pid > 0) {
+                    String r = RootBoost.boost(this, pid, "checker");
+                    sb.append("iOS is running; boosted now:\n").append(r == null ? "no answer" : r);
+                } else {
+                    sb.append("Nothing runs now: it is applied by itself when iOS or a setup step starts. "
+                            + "(The result of each try is in Logs: \"root boost\".)");
+                }
+            }
+            String msg = sb.toString();
+            runOnUiThread(() -> {
+                showSettings();
+                new AlertDialog.Builder(this).setTitle("Root boost").setMessage(msg).setPositiveButton("OK", null).show();
+            });
+        }, "root-check").start();
     }
 
     private void toggleFreeRam() {
