@@ -1,23 +1,29 @@
-name: Inspect helper image
+name: Test helper patch
 on:
   push:
     branches: [inspect-helper]
 jobs:
-  look:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - env:
+      - uses: actions/checkout@v4
+      - name: pcopy on a made-up tree
+        run: |
+          sudo apt-get install -y rsync >/dev/null 2>&1 || true
+          bash tools/helper-patch/test-pcopy.sh
+      - name: patch the real initrd
+        env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set +e
           mkdir -p /tmp/author && cd /tmp/author
           gh release download -R alpersamur3/asoft-ios-android -p '*.apk' -D .
           unzip -q -o ./*.apk 'assets/helper/*' -d x
-          ls -l x/assets/helper
-          mkdir rd && cd rd
-          gunzip -c ../x/assets/helper/initrd.gz.bin > ../initrd.cpio
-          file ../initrd.cpio
-          cpio -idm < ../initrd.cpio 2>&1 | tail -2
-          echo "=== ls asoft"; ls -l asoft
-          for f in asoft/mkiosroot.sh asoft/asoft-disk.sh asoft/sweet-root-tweaks.py; do echo "=== $f"; cat $f; done
-          echo "=== tools"; ls /tmp/author/rd/usr/bin | grep -iE "apfs|rsync|hfs|pigz|zstd|tar|cp$|dmg|7z|rclone|parallel" ; ls /tmp/author/rd/usr/local/bin /tmp/author/rd/asoft/ 2>&1; nproc
+          python3 $GITHUB_WORKSPACE/tools/patch-helper-initrd.py x/assets/helper/initrd.gz.bin patched.gz
+          ls -l x/assets/helper/initrd.gz.bin patched.gz
+          gunzip -c x/assets/helper/initrd.gz.bin | cpio -t 2>/dev/null | sort > a.txt
+          gunzip -c patched.gz | cpio -t 2>/dev/null | sort > b.txt
+          diff a.txt b.txt && echo "same file list ($(wc -l < a.txt) entries)"
+          mkdir rd && cd rd && gunzip -c ../patched.gz | cpio -idm 2>/dev/null
+          bash -n asoft/mkiosroot.sh && echo "mkiosroot.sh syntax ok"
+          grep -c "pcopy" asoft/mkiosroot.sh
+          ls -l asoft/mkiosroot.sh
