@@ -65,6 +65,19 @@ jobs:
           # the Windows JDK path in gradle.properties does not exist here
           sed -i '/^org.gradle.java.home=/d' gradle.properties
 
+      - name: Parallel iOS copy in the helper image (setup 2-3x faster, plain copy as the fallback)
+        run: |
+          set +e
+          python3 tools/patch-helper-initrd.py app/src/main/assets/helper/initrd.gz.bin /tmp/initrd.patched
+          rc=$?
+          if [ $rc -eq 0 ]; then
+            cp /tmp/initrd.patched app/src/main/assets/helper/initrd.gz.bin
+            echo "helper image patched"
+          else
+            echo "::warning::helper image not patched (exit $rc): the author's mkiosroot.sh changed; the plain copy stays"
+          fi
+          exit 0
+
       - name: Signing key (release only)
         if: ${{ github.event.inputs.variant == 'release' }}
         env:
