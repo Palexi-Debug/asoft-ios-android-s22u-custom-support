@@ -23,7 +23,7 @@ jobs:
           gunzip -c x/assets/helper/initrd.gz.bin | cpio -t 2>/dev/null | sort > a.txt
           gunzip -c patched.gz | cpio -t 2>/dev/null | sort > b.txt
           diff a.txt b.txt && echo "same file list ($(wc -l < a.txt) entries)"
-          mkdir rd && cd rd && gunzip -c ../patched.gz | cpio -idm 2>/dev/null
+          mkdir rd && cd rd && { gunzip -c ../patched.gz | cpio -idm 2>/dev/null || true; }
           bash -n asoft/mkiosroot.sh && echo "mkiosroot.sh syntax ok"
           grep -c "pcopy" asoft/mkiosroot.sh
           ls -l asoft/mkiosroot.sh

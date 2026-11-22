@@ -28,12 +28,53 @@ def walk(rel, depth):
         else:
             units.append(r)         # a file, a link, or a directory at depth 3 (rsync takes all below it)
 walk('', 1)
+index = {u: i for i, u in enumerate(units)}
+parent = list(range(len(units)))
+def find(x):
+    while parent[x] != x:
+        parent[x] = parent[parent[x]]
+        x = parent[x]
+    return x
+def unit_of(rel):
+    return os.path.join(*rel.split(os.sep)[:3])
+# hard links: all files of one link group must go through the same rsync (-H only sees what it copies),
+# so the pieces that share an inode are joined
+seen = {}
+def scan(full, rel):
+    with os.scandir(full) as it:
+        for e in it:
+            r = os.path.join(rel, e.name) if rel else e.name
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    scan(e.path, r)
+                elif not e.is_symlink():
+                    st = e.stat(follow_symlinks=False)
+                    if st.st_nlink > 1:
+                        u = index.get(unit_of(r))
+                        if u is None:
+                            continue
+                        k = (st.st_dev, st.st_ino)
+                        if k in seen:
+                            parent[find(u)] = find(seen[k])
+                        else:
+                            seen[k] = u
+            except OSError:
+                pass
+scan(src, '')
+groups = {}
+for i in range(len(units)):
+    groups.setdefault(find(i), []).append(i)
 files = [open(os.path.join(out, str(i)), 'wb') for i in range(n)]
-for k, u in enumerate(units):
-    files[k % n].write(u.encode('utf-8', 'surrogateescape') + b'\0')
+load = [0] * n
+for k, members in enumerate(sorted(groups.values(), key=lambda m: -len(m))):
+    # the biggest groups first, each to the list with the fewest pieces so far
+    j = min(range(n), key=lambda i: load[i])
+    load[j] += len(members)
+    for m in members:
+        files[j].write(units[m].encode('utf-8', 'surrogateescape') + b'\0')
 for f in files:
     f.close()
-print('parallel copy: %d pieces in %d lists' % (len(units), n))
+print('parallel copy: %d pieces (%d linked groups joined) in %d lists' % (len(units), sum(1 for m in groups.values() if len(m) > 1), n))
 PYEOF
 	for ((i = 0; i < n; i++)); do
 		echo "copying part $((i + 1))/$n of $work/os/root"

@@ -12,6 +12,8 @@ for i in $(seq 1 40); do mkdir -p "System/Library/PrivateFrameworks/F$i.framewor
 head -c 100000 /dev/urandom > usr/lib/libx.dylib
 ln usr/lib/libx.dylib usr/lib/libx-hard.dylib
 ln -s libx.dylib usr/lib/libx-link.dylib
+ln usr/lib/libx.dylib System/Library/Frameworks/A.framework/libx-cross
+ln usr/lib/libx.dylib System/Library/PrivateFrameworks/F7.framework/libx-cross2
 ln -s /private/var linkdir
 echo hi > "usr/bin/with space"
 printf 'x' > $'usr/bin/new\nline'
@@ -34,6 +36,9 @@ echo "== differences against the plain copy (nothing below the line means equal)
 d=$(sudo rsync -naic --omit-dir-times --numeric-ids "$T/ref/" "$T/root/" || true)
 echo "$d"
 [ -z "$d" ] || { echo "DIFFERENT"; exit 1; }
-echo "== hard link kept inside a piece:"; stat -c '%i %n' "$T/root/usr/lib/libx.dylib" "$T/root/usr/lib/libx-hard.dylib"
+echo "== hard link group across pieces:"
+n=$(stat -c %i "$T/root/usr/lib/libx.dylib" "$T/root/usr/lib/libx-hard.dylib" "$T/root/System/Library/Frameworks/A.framework/libx-cross" "$T/root/System/Library/PrivateFrameworks/F7.framework/libx-cross2" | sort -u | wc -l)
+[ "$n" = 1 ] || { echo "LINKS NOT KEPT ($n inodes)"; exit 1; }
+echo "kept: one inode"
 ls -ld "$T/root" "$T/root/System/Library/Frameworks" "$T/root/private/var/mobile"
 echo "PCOPY TEST OK"
