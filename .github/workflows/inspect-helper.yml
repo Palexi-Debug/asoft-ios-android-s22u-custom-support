@@ -19,5 +19,5 @@ jobs:
           file ../initrd.cpio
           cpio -idm < ../initrd.cpio 2>&1 | tail -2
           echo "=== ls asoft"; ls -l asoft
-          for f in asoft/job-build-root.sh asoft/job-run.sh; do echo "=== $f"; cat $f; done
-          echo "=== other scripts"; ls /tmp/author/rd/asoft /tmp/author/rd/usr/local/bin 2>&1
+          for f in asoft/mkiosroot.sh asoft/asoft-disk.sh asoft/sweet-root-tweaks.py; do echo "=== $f"; cat $f; done
+          echo "=== tools"; ls /tmp/author/rd/usr/bin | grep -iE "apfs|rsync|hfs|pigz|zstd|tar|cp$|dmg|7z|rclone|parallel" ; ls /tmp/author/rd/usr/local/bin /tmp/author/rd/asoft/ 2>&1; nproc
