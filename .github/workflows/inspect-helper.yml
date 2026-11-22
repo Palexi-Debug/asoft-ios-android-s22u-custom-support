@@ -1,0 +1,26 @@
+name: Inspect helper image
+on:
+  push:
+    branches: [inspect-helper]
+jobs:
+  look:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/author && cd /tmp/author
+          gh release download -R alpersamur3/asoft-ios-android -p '*.apk' -D .
+          ls -l *.apk
+          unzip -q -o ./*.apk 'assets/helper/*' 'assets/setup/*' -d x
+          ls -lR x/assets | head -80
+          mkdir rd && cd rd
+          gunzip -c ../x/assets/helper/initrd.gz.bin | cpio -idm 2>/dev/null
+          ls asoft | head -50
+          for f in asoft/job-build-root.sh; do echo "=== $f"; cat $f; done
+          echo "=== other asoft scripts"; ls -l asoft
+          ls usr/bin | head -100
+      - name: helper job lines
+        run: |
+          cd /tmp/author/rd
+          for f in asoft/*.sh; do echo "=== $f"; wc -l $f; done
