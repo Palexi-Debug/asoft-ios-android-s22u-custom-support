@@ -82,6 +82,12 @@ jobs:
           P
           echo "ASOFT_SIGNING=$RUNNER_TEMP/asoft-signing.properties" >> "$GITHUB_ENV"
 
+      - name: Fixed debug key (so a newer Dev build installs over the older one)
+        if: ${{ github.event.inputs.variant != 'release' }}
+        run: |
+          mkdir -p ~/.android
+          cp tools/debug.keystore ~/.android/debug.keystore
+
       - name: Build
         run: |
           chmod +x gradlew

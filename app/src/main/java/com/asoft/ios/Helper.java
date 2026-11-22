@@ -277,6 +277,14 @@ final class Helper {
      * Before a VM of @mib starts: when MemAvailable is under what it takes, one round of the app's memory
      * freeing (MemoryCleaner, when the user allows it), else memoryNote for the setup screens. Never blocks the job.
      */
+    private static void sleepQuiet(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static void beforeJob(Context c, int mib) {
         long need = needBytes(mib), avail = available(c);
         if (avail >= need) {
@@ -285,6 +293,15 @@ final class Helper {
         }
         if (MemoryCleaner.beforeHelper(c)) {
             avail = available(c);
+        }
+        // a rooted phone (RootBoost): the user gave root for exactly this, so no extra switch; this is the cleaner's own
+        // "am kill-all" (background processes of other apps only). Runs on the setup's thread, never the UI's.
+        if (avail < need && RootBoost.killAll(c, 30_000)) {
+            sleepQuiet(1500);
+            long after = available(c);
+            AppLog.note(c, String.format(java.util.Locale.ROOT, "helper: short of memory: am kill-all as root, %.1f -> %.1f GB available",
+                    avail / 1e9, after / 1e9));
+            avail = after;
         }
         if (avail >= need) {
             memoryNote = null;
