@@ -1,0 +1,51 @@
+name: Symbolicate iOS 16 console addresses
+on:
+  push:
+    branches: [inspect-helper]
+    paths: ['symbolicate/**', '.github/workflows/symbolicate.yml', 'tools/ci/**']
+jobs:
+  sym:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: dsc
+        with:
+          path: /home/runner/dsc
+          key: dsc-20H392-v1
+      - name: Fetch SystemOS and pull the dyld shared cache out
+        if: steps.dsc.outputs.cache-hit != 'true'
+        run: |
+          set -x
+          URL=$(python3 -c "import json;print(json.load(open('setup/asoft-setup.json'))['os']['ios16']['sources']['ipsw']['url'])")
+          python3 tools/ci/fetch_member.py "$URL" 087-86593-047.dmg /tmp/SystemOS.dmg
+          sudo apt-get update -qq
+          sudo apt-get install -y apfs-fuse fuse3 || sudo apt-get install -y apfs-fuse
+          mkdir -p /tmp/sysos /home/runner/dsc
+          ln -sf /tmp/SystemOS.dmg /tmp/sysos.dmg
+          sudo apfs-fuse -o allow_other /tmp/sysos.dmg /tmp/sysos
+          sudo find /tmp/sysos -name 'dyld_shared_cache*' | head -20
+          sudo find /tmp/sysos -name 'dyld_shared_cache*' -exec cp -v {} /home/runner/dsc/ \;
+          sudo chown -R runner /home/runner/dsc
+          sudo umount /tmp/sysos || true
+          ls -l /home/runner/dsc
+      - name: Get ipsw
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/ipsw && cd /tmp/ipsw
+          gh release download -R blacktop/ipsw -p '*linux_x86_64.tar.gz' -D .
+          tar xzf *.tar.gz
+          ls
+          ./ipsw version
+      - name: Symbolicate
+        run: |
+          cd /tmp/ipsw
+          ls -l /home/runner/dsc
+          DSC=$(ls /home/runner/dsc/dyld_shared_cache_arm64* | grep -v '\.[0-9]*$' | grep -v '\.map\|\.dylddata\|\.atlas' | head -1)
+          echo "cache: $DSC"
+          ./ipsw dyld a2s --help || true
+          grep -v '^#' $GITHUB_WORKSPACE/symbolicate/addrs.txt | while read a; do
+            [ -n "$a" ] || continue
+            echo "=== $a"; ./ipsw dyld a2s "$DSC" "$a" 2>&1 | head -5
+          done

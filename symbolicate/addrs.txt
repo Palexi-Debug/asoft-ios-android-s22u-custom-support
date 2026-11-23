@@ -1,0 +1,6 @@
+# one runtime address per line (0x...), from the "SMP" lines of the iOS console
+0x1ed75dad0
+0x1ed75d030
+0x1ed75d4f0
+0x1fcc54140
+0x1b8cd12cc
