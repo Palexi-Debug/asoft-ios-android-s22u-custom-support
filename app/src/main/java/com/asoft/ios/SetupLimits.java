@@ -31,7 +31,7 @@ final class SetupLimits {
      * Whatever the signs, stop here. 8 h = 20 times the S25's 23 min; the two slowest reports (#59, #23) were
      * past 2 h, and 2 h was the old limit.
      */
-    static final long FIRST_START_CEILING_MS = 8 * 60 * MIN;
+    static final long FIRST_START_CEILING_MS = 16 * 60 * MIN;   // s22u fork: 8 h was hit at 95 % on an Exynos 2200 that still started new daemons
 
     // -- iOS 26, DataMigration (PhoneSetup26.iosWallpaper) ---------------------------------------------------
     // All three count from the last answer of iOS's shell, so they only run once it has gone silent. A silent shell
