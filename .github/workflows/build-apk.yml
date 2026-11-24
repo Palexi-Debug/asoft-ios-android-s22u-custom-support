@@ -19,7 +19,7 @@ on:
         type: choice
         options: [dev, release]
   push:
-    branches: [s22u-anr-fix]
+    branches: [s22u-anr-fix, s22u-v017]
 
 jobs:
   build:
